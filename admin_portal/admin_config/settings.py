@@ -7,8 +7,8 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-temporary-key')
-DEBUG = True
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*']
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*', '.onrender.com']
 
 INSTALLED_APPS = [
     'django.contrib.contenttypes',
@@ -78,6 +78,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://*.onrender.com",
 ]
 
 LOGIN_URL = '/custom-admin/login/'
