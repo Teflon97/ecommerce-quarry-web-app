@@ -1,0 +1,84 @@
+{% extends 'base.html' %} {% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Products Management</h2>
+            <p class="text-muted">Manage your product catalog</p>
+        </div>
+        <div class="col-auto">
+            <a href="/custom-admin/portal/products/create/" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Add Product
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Product ID</th>
+                            <th>Image</th>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th>Price (BWP)</th>
+                            <th>Unit</th>
+                            <th>Stock</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in products %}
+                        <tr>
+                            <td><code>{{ product.product_id }}</code></td>
+                            <td>
+                                {% if product.image_url %}
+                                <img src="{{ product.image_url }}" alt="{{ product.name }}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;"> {% else %}
+                                <div style="width: 50px; height: 50px; background: #e9ecef; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                    <i class="bi bi-image text-muted"></i>
+                                </div>
+                                {% endif %}
+                                </strong>
+                                <td><strong>{{ product.name }}</strong></strong>
+                                    <td><span class="badge bg-info">{{ product.category }}</span></strong>
+                                        <td>P{{ product.price|floatformat:2 }}</strong>
+                                            <td>{{ product.unit }}</strong>
+                                                <td>
+                                                    {% if product.stock_quantity > 100 %}
+                                                    <span class="badge bg-success">{{ product.stock_quantity }}</span> {% elif product.stock_quantity > 0 %}
+                                                    <span class="badge bg-warning">{{ product.stock_quantity }}</span> {% else %}
+                                                    <span class="badge bg-danger">Out of Stock</span> {% endif %}
+                                                    </strong>
+                                                    <td>
+                                                        {% if product.status == 'sale' %}
+                                                        <span class="badge bg-danger">On Sale</span> {% else %}
+                                                        <span class="badge bg-secondary">Normal</span> {% endif %}
+                                                        </strong>
+                                                        <td>
+                                                            <a href="/custom-admin/portal/products/{{ product.id }}/" class="btn btn-sm btn-info">
+                                                                <i class="bi bi-eye"></i>
+                                                            </a>
+                                                            <a href="/custom-admin/portal/products/{{ product.id }}/edit/" class="btn btn-sm btn-warning">
+                                                                <i class="bi bi-pencil"></i>
+                                                            </a>
+                                                            <a href="/custom-admin/portal/products/{{ product.id }}/delete/" class="btn btn-sm btn-danger">
+                                                                <i class="bi bi-trash"></i>
+                                                            </a>
+                                                            </strong>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                No products found. Click "Add Product" to get started.
+                                </strong>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

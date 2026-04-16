@@ -1,0 +1,429 @@
+{% extends 'driver/base.html' %} {% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h2 class="text-white">Notifications</h2>
+            <p class="text-white-50">View and manage your delivery assignments</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-bell-fill"></i> Pending Assignments</h5>
+                </div>
+                <div class="card-body scrollable-list" id="pendingAssignmentsList">
+                    <div class="text-center text-muted py-4">
+                        <div class="spinner-border text-success" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Assignment History</h5>
+                </div>
+                <div class="card-body scrollable-list" id="historyList">
+                    <div class="text-center text-muted py-4">
+                        <div class="spinner-border text-warning" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assignment Details Modal -->
+<div class="modal fade" id="assignmentDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assignment Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="assignmentDetailsBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" id="assignmentDetailsFooter">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Reject Assignment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label">Reason for rejection</label>
+                <textarea class="form-control" id="rejectionReason" rows="3" placeholder="Please provide a reason for rejecting this assignment..."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmRejectBtn">Confirm Reject</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let pendingRequestId = null;
+    let allRequests = [];
+    let allDeliveries = [];
+
+    function loadData() {
+        loadPendingAssignments();
+        loadHistory();
+    }
+
+    function loadPendingAssignments() {
+        fetch('/driver/requests/')
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                allRequests = data.requests || [];
+                displayPendingAssignments(allRequests);
+            })
+            .catch(function(error) {
+                console.error('Error loading assignments:', error);
+                document.getElementById('pendingAssignmentsList').innerHTML = '<div class="text-center text-danger py-4">Error loading assignments</div>';
+            });
+    }
+
+    function displayPendingAssignments(assignments) {
+        var container = document.getElementById('pendingAssignmentsList');
+        if (assignments.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-4">No pending assignments</div>';
+            return;
+        }
+
+        var html = '';
+        for (var i = 0; i < assignments.length; i++) {
+            var a = assignments[i];
+            var order = a.order_id || {};
+            var address = 'Address not available';
+            if (order.delivery_location) {
+                if (order.delivery_location.address) {
+                    address = order.delivery_location.address;
+                } else if (typeof order.delivery_location === 'string') {
+                    address = order.delivery_location;
+                }
+            }
+            var orderId = order.id ? order.id.slice(0, 12) + '...' : 'N/A';
+            var customer = order.customer || 'N/A';
+            var total = order.total || 0;
+            var weight = a.total_weight_kg || 0;
+
+            html += '<div class="card assignment-card mb-2" data-id="' + a.id + '" onclick="showAssignmentDetails(\'' + a.id + '\', \'pending\')" style="cursor: pointer;">' +
+                '<div class="card-body">' +
+                '<h6 class="card-title">Order: ' + orderId + '</h6>' +
+                '<p class="card-text small mb-1">' +
+                '<strong>Customer:</strong> ' + customer + '<br>' +
+                '<strong>Address:</strong> ' + address.substring(0, 60) + '<br>' +
+                '<strong>Total:</strong> $' + total.toFixed(2) + ' | <strong>Weight:</strong> ' + weight + ' kg' +
+                '</p>' +
+                '</div>' +
+                '</div>';
+        }
+        container.innerHTML = html;
+    }
+
+    function loadHistory() {
+        fetch('/driver/deliveries/')
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                allDeliveries = data.deliveries || [];
+                displayHistory(allDeliveries);
+            })
+            .catch(function(error) {
+                console.error('Error loading history:', error);
+                document.getElementById('historyList').innerHTML = '<div class="text-center text-danger py-4">Error loading history</div>';
+            });
+    }
+
+    function displayHistory(deliveries) {
+        var container = document.getElementById('historyList');
+        if (deliveries.length === 0) {
+            container.innerHTML = '<div class="text-center text-muted py-4">No delivery history</div>';
+            return;
+        }
+
+        var html = '';
+        for (var i = 0; i < deliveries.length; i++) {
+            var d = deliveries[i];
+            var statusDisplay = getStatusDisplay(d.status);
+
+            var customerName = d.customer_name || 'N/A';
+            var customerPhone = d.customer_phone || 'N/A';
+            var deliveryAddress = d.delivery_address || '';
+            var weight = d.total_weight_kg || 0;
+            var deliveryNumber = d.delivery_number || 'Delivery';
+
+            html += '<div class="card delivery-card mb-2" onclick="showAssignmentDetails(\'' + d.id + '\', \'' + d.status + '\')" style="cursor: pointer;">' +
+                '<div class="card-body">' +
+                '<div class="d-flex justify-content-between align-items-start">' +
+                '<h6 class="card-title">' + deliveryNumber + '</h6>' +
+                '<span class="status-badge status-' + d.status + '">' + statusDisplay + '</span>' +
+                '</div>' +
+                '<p class="card-text small mb-1">' +
+                '<strong>Customer:</strong> ' + customerName + ' | 📞 ' + customerPhone + '<br>' +
+                '<strong>Address:</strong> ' + (deliveryAddress.substring(0, 60)) + '<br>' +
+                '<strong>Weight:</strong> ' + weight + ' kg' +
+                '</p>';
+
+            if (d.delivered_at) {
+                html += '<div class="text-success small">Completed on ' + new Date(d.delivered_at).toLocaleDateString() + '</div>';
+            } else if (d.accepted_at) {
+                html += '<div class="text-warning small">Accepted on ' + new Date(d.accepted_at).toLocaleDateString() + '</div>';
+            }
+
+            html += '</div></div>';
+        }
+        container.innerHTML = html;
+    }
+
+    function getStatusDisplay(status) {
+        var display = {
+            'accepted': 'Accepted',
+            'loading': 'Loading at Quarry',
+            'in_transit': 'In Transit',
+            'delivered': 'Delivered',
+            'assigned': 'Assigned'
+        };
+        return display[status] || status;
+    }
+
+    function showAssignmentDetails(itemId, status) {
+        var url = (status === 'pending') ? '/driver/request/' + itemId + '/' : '/driver/delivery/' + itemId + '/';
+
+        fetch(url)
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.error) {
+                    alert('Error loading assignment details');
+                    return;
+                }
+
+                displayDetailsModal(data, status, itemId);
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                alert('Error loading assignment details');
+            });
+    }
+
+    function displayDetailsModal(data, status, itemId) {
+        var modalBody = document.getElementById('assignmentDetailsBody');
+        var modalFooter = document.getElementById('assignmentDetailsFooter');
+
+        // Parse items
+        var itemsHtml = '';
+        if (data.items && data.items.length > 0) {
+            itemsHtml = '<h6 class="mt-3">Order Items</h6>' +
+                '<div class="table-responsive">' +
+                '<table class="table table-sm">' +
+                '<thead><tr><th>Product</th><th>Quantity</th><th>Price</th><th>Subtotal</th></tr></thead>' +
+                '<tbody>';
+            for (var i = 0; i < data.items.length; i++) {
+                var item = data.items[i];
+                var subtotal = item.quantity * item.price;
+                itemsHtml += '<tr>' +
+                    '<td>' + (item.name || 'Unknown') + '</td>' +
+                    '<td>' + item.quantity + '</td>' +
+                    '<td>$' + parseFloat(item.price).toFixed(2) + '</td>' +
+                    '<td>$' + subtotal.toFixed(2) + '</td>' +
+                    '</tr>';
+            }
+            itemsHtml += '</tbody></table></div>';
+        }
+
+        var statusDisplay = getStatusDisplay(status);
+        var statusClass = '';
+        if (status === 'delivered') statusClass = 'text-success';
+        else if (status === 'accepted' || status === 'in_transit' || status === 'loading') statusClass = 'text-info';
+        else if (status === 'pending') statusClass = 'text-warning';
+        else if (status === 'rejected') statusClass = 'text-danger';
+
+        var modalContent = `
+            <div class="mb-4">
+                <h6>Order Details</h6>
+                <table class="table table-sm">
+                    <tr><th style="width: 40%">Order ID:</th><td><code>${data.order_id || 'N/A'}</code></td></tr>
+                    <tr><th>Customer:</th><td>${data.customer || 'N/A'}</td></tr>
+                    <tr><th>Phone:</th><td>${data.customer_phone || 'N/A'}</td></tr>
+                    <tr><th>Total:</th><td>$${parseFloat(data.total || 0).toFixed(2)}</td></tr>
+                    <tr><th>Delivery Address:</th><td>${data.delivery_address || 'N/A'}</td></tr>
+                    <tr><th>Status:</th><td><span class="${statusClass}">${statusDisplay}</span></td></tr>
+                    ${data.notes ? `<tr><th>Notes:</th><td>${data.notes}</td></tr>` : ''}
+                    <tr><th>Created At:</th><td>${new Date(data.created_at).toLocaleString()}</td></tr>
+                </table>
+                ${itemsHtml}
+            </div>
+        `;
+        
+        modalBody.innerHTML = modalContent;
+        
+        // Set footer buttons based on status
+        var footerHtml = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>';
+        
+        if (status === 'pending') {
+            // Pending assignment - show Accept and Reject buttons
+            footerHtml = `
+                <button type="button" class="btn btn-success" onclick="respondFromModal('${itemId}', 'accept')">Accept</button>
+                <button type="button" class="btn btn-danger" onclick="showRejectModal('${itemId}')">Reject</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            `;
+        } else if (status === 'accepted' || status === 'loading' || status === 'in_transit') {
+            // Accepted/Active delivery - show View on Map button
+            footerHtml = `
+                <button type="button" class="btn btn-primary" onclick="goToDashboard('${itemId}')">View on Map</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            `;
+        } else if (status === 'delivered') {
+            // Completed delivery - only Close button
+            footerHtml = '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>';
+        }
+        
+        modalFooter.innerHTML = footerHtml;
+        
+        var detailsModal = new bootstrap.Modal(document.getElementById('assignmentDetailsModal'));
+        detailsModal.show();
+    }
+    
+    function goToDashboard(deliveryId) {
+        // Close the modal first
+        var modal = bootstrap.Modal.getInstance(document.getElementById('assignmentDetailsModal'));
+        if (modal) modal.hide();
+        
+        // Redirect to dashboard - the dashboard will handle showing the route
+        window.location.href = '/driver/dashboard/';
+        
+        // Store delivery ID to show route automatically on dashboard load
+        sessionStorage.setItem('autoShowRoute', deliveryId);
+    }
+    
+    function respondFromModal(requestId, action) {
+        var modal = bootstrap.Modal.getInstance(document.getElementById('assignmentDetailsModal'));
+        if (modal) modal.hide();
+        respondToRequest(requestId, action);
+    }
+    
+    function respondToRequest(requestId, action) {
+        var url = '/driver/request/' + requestId + '/respond/';
+        var body = JSON.stringify({ action: action });
+        
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: body
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                loadData();
+                updateNotificationCount();
+                if (action === 'accept' && data.redirect) {
+                    window.location.href = data.redirect;
+                }
+            } else {
+                alert('Failed to ' + action + ' request: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(function(error) {
+            console.error('Error:', error);
+            alert('Error processing request');
+        });
+    }
+    
+    function showRejectModal(requestId) {
+        pendingRequestId = requestId;
+        var rejectModal = new bootstrap.Modal(document.getElementById('rejectModal'));
+        rejectModal.show();
+    }
+    
+    function updateNotificationCount() {
+        fetch('/driver/notifications/count/')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                var count = data.notifications || 0;
+                var badge = document.getElementById('notificationCount');
+                if (count > 0) {
+                    badge.textContent = count;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            })
+            .catch(function(error) { console.error('Error fetching notifications:', error); });
+    }
+    
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    document.getElementById('confirmRejectBtn').addEventListener('click', function() {
+        var reason = document.getElementById('rejectionReason').value;
+        fetch('/driver/request/' + pendingRequestId + '/respond/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ action: 'reject', rejection_reason: reason })
+        })
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
+            if (data.success) {
+                var rejectModal = bootstrap.Modal.getInstance(document.getElementById('rejectModal'));
+                if (rejectModal) rejectModal.hide();
+                document.getElementById('rejectionReason').value = '';
+                loadData();
+                updateNotificationCount();
+            } else {
+                alert('Failed to reject request');
+            }
+        })
+        .catch(function(error) { console.error('Error:', error); });
+    });
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        loadData();
+        setInterval(loadData, 60000);
+    });
+</script>
+{% endblock %}

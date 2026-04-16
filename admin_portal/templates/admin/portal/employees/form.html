@@ -1,0 +1,167 @@
+{% extends 'base.html' %} {% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>{% if employee %}Edit Employee{% else %}Add New Employee{% endif %}</h2>
+            <p class="text-muted">Fill in the employee details below</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post" id="employeeForm">
+                {% csrf_token %}
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">First Name *</label>
+                        <input type="text" class="form-control" name="first_name" value="{% if employee %}{{ employee.first_name }}{% endif %}" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Last Name *</label>
+                        <input type="text" class="form-control" name="last_name" value="{% if employee %}{{ employee.last_name }}{% endif %}" required>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Email *</label>
+                        <input type="email" class="form-control" name="email" value="{% if employee %}{{ employee.email }}{% endif %}" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Phone Number *</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">+267</span>
+                            <input type="tel" class="form-control" name="phone" id="phone" value="{% if employee %}{{ employee.phone|cut:'+267' }}{% endif %}" placeholder="71234567" maxlength="8" pattern="[0-9]{8}" required>
+                        </div>
+                        <small class="text-muted">Enter 8 digits after +267 (e.g., 71234567)</small>
+                        <div id="phoneError" class="text-danger small mt-1" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Address</label>
+                    <textarea class="form-control" name="address" rows="2">{% if employee %}{{ employee.address|default:'' }}{% endif %}</textarea>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Department *</label>
+                        <select class="form-select" name="department" required>
+                            <option value="">Select Department</option>
+                            {% for dept in departments %}
+                            <option value="{{ dept }}" {% if employee.department == dept %}selected{% endif %}>{{ dept }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Role *</label>
+                        <select class="form-select" name="role" id="role" required>
+                            <option value="">Select Role</option>
+                            {% for role in roles %}
+                            <option value="{{ role }}" {% if employee.role == role %}selected{% endif %}>{{ role }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div id="driverFields" style="display: none;">
+                    <hr>
+                    <h5>Driver Information</h5>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Driver License Number</label>
+                            <input type="text" class="form-control" name="driver_license_number" value="{% if employee %}{{ employee.driver_license_number|default:'' }}{% endif %}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Max Load Capacity (kg)</label>
+                            <input type="number" step="0.01" class="form-control" name="max_load_capacity_kg" value="{% if employee %}{{ employee.max_load_capacity_kg|default:'' }}{% endif %}">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" name="available_for_delivery" id="available_for_delivery" {% if employee.available_for_delivery %}checked{% endif %}>
+                            <label class="form-check-label" for="available_for_delivery">Available for Delivery</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" name="is_active" id="is_active" {% if employee.is_active or not employee %}checked{% endif %}>
+                        <label class="form-check-label" for="is_active">Active Employee</label>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary">Save Employee</button>
+                    <a href="/custom-admin/portal/employees/" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    const roleSelect = document.getElementById('role');
+    const driverFields = document.getElementById('driverFields');
+    const phoneInput = document.getElementById('phone');
+    const phoneError = document.getElementById('phoneError');
+
+    function toggleDriverFields() {
+        if (roleSelect.value === 'Driver') {
+            driverFields.style.display = 'block';
+        } else {
+            driverFields.style.display = 'none';
+        }
+    }
+
+    function validatePhone() {
+        const phone = phoneInput.value;
+        // Check if exactly 8 digits
+        const phoneRegex = /^[0-9]{8}$/;
+
+        if (!phoneRegex.test(phone)) {
+            phoneError.textContent = 'Please enter exactly 8 digits (0-9)';
+            phoneError.style.display = 'block';
+            return false;
+        }
+
+        phoneError.style.display = 'none';
+        return true;
+    }
+
+    // Real-time validation
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+            // Remove any non-digit characters
+            this.value = this.value.replace(/[^0-9]/g, '').slice(0, 8);
+
+            if (this.value.length === 8) {
+                phoneError.style.display = 'none';
+            } else if (this.value.length > 0) {
+                phoneError.textContent = `Need ${8 - this.value.length} more digit(s)`;
+                phoneError.style.display = 'block';
+            } else {
+                phoneError.style.display = 'none';
+            }
+        });
+    }
+
+    // Validate on form submit
+    const form = document.getElementById('employeeForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            if (!validatePhone()) {
+                e.preventDefault();
+                phoneInput.focus();
+            }
+        });
+    }
+
+    if (roleSelect) {
+        roleSelect.addEventListener('change', toggleDriverFields);
+        toggleDriverFields();
+    }
+</script>
+{% endblock %}

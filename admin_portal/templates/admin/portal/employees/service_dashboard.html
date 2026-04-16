@@ -1,0 +1,264 @@
+{% extends 'base.html' %} {% load static %} {% block title %}Service Dashboard{% endblock %} {% block extra_css %}
+<style>
+    .delivery-card {
+        border-left: 4px solid;
+        transition: transform 0.2s;
+        margin-bottom: 1rem;
+    }
+    
+    .delivery-card:hover {
+        transform: translateX(5px);
+    }
+    
+    .card-pending {
+        border-left-color: #ffc107;
+    }
+    
+    .card-accepted {
+        border-left-color: #17a2b8;
+    }
+    
+    .card-transit {
+        border-left-color: #007bff;
+    }
+    
+    .status-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+    }
+    
+    .location-status {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+</style>
+{% endblock %} {% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Service Dashboard</h2>
+            <p class="text-muted">Welcome back, {{ employee.full_name }}!</p>
+        </div>
+        <div class="col-auto">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="text-muted">Completed Deliveries</h6>
+                    <h3 class="mb-0">{{ completed_deliveries }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Available Assignments -->
+        <div class="col-md-4 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Available Assignments</h5>
+                    <small>Within your capacity ({{ employee.max_load_kg|default:"Unlimited" }}kg)</small>
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    {% for assignment in available_assignments %}
+                    <div class="card delivery-card card-pending">
+                        <div class="card-body">
+                            <h6>Order #{{ assignment.order.order_number }}</h6>
+                            <p class="mb-1"><strong>Customer:</strong> {{ assignment.order.customer_name }}</p>
+                            <p class="mb-1"><strong>Weight:</strong> {{ assignment.total_weight_kg }}kg</p>
+                            <p class="mb-1"><strong>Address:</strong> {{ assignment.order.customer_address|truncatechars:50 }}</p>
+                            <button class="btn btn-sm btn-success mt-2" onclick="acceptDelivery('{{ assignment.id }}')">
+                                <i class="bi bi-check-circle"></i> Accept Delivery
+                            </button>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted text-center">No available assignments at this time.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Deliveries -->
+        <div class="col-md-4 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Active Deliveries</h5>
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    <h6 class="text-muted">Accepted</h6>
+                    {% for assignment in accepted_assignments %}
+                    <div class="card delivery-card card-accepted mb-2">
+                        <div class="card-body">
+                            <h6>Order #{{ assignment.order.order_number }}</h6>
+                            <p class="mb-1">{{ assignment.order.customer_name }}</p>
+                            <button class="btn btn-sm btn-warning mt-2" onclick="updateStatus('{{ assignment.id }}', 'picked_up')">
+                                <i class="bi bi-truck"></i> Mark as Picked Up
+                            </button>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted text-center">No accepted deliveries.</p>
+                    {% endfor %}
+
+                    <h6 class="text-muted mt-3">In Transit</h6>
+                    {% for assignment in in_transit_assignments %}
+                    <div class="card delivery-card card-transit mb-2">
+                        <div class="card-body">
+                            <h6>Order #{{ assignment.order.order_number }}</h6>
+                            <p class="mb-1">{{ assignment.order.customer_name }}</p>
+                            <button class="btn btn-sm btn-success mt-2" onclick="markDelivered('{{ assignment.id }}')">
+                                <i class="bi bi-check-circle"></i> Mark as Delivered
+                            </button>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted text-center">No deliveries in transit.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending Deliveries -->
+        <div class="col-md-4 mb-4">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Pending Deliveries</h5>
+                </div>
+                <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                    {% for assignment in pending_assignments %}
+                    <div class="card delivery-card">
+                        <div class="card-body">
+                            <h6>Order #{{ assignment.order.order_number }}</h6>
+                            <p class="mb-1"><strong>Customer:</strong> {{ assignment.order.customer_name }}</p>
+                            <p class="mb-1"><strong>Weight:</strong> {{ assignment.total_weight_kg }}kg</p>
+                            <p class="mb-1"><strong>Address:</strong> {{ assignment.order.customer_address }}</p>
+                            <div class="mt-2">
+                                <button class="btn btn-sm btn-primary" onclick="getLocationAndUpdate('{{ assignment.id }}', 'accepted')">
+                                    <i class="bi bi-geo-alt"></i> Accept with Location
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted text-center">No pending deliveries.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function acceptDelivery(assignmentId) {
+        if (confirm('Are you sure you want to accept this delivery?')) {
+            fetch(`/custom-admin/portal/employees/delivery/${assignmentId}/accept/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert(data.error);
+                    }
+                });
+        }
+    }
+
+    function updateStatus(assignmentId, status) {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(position => {
+                const formData = new FormData();
+                formData.append('status', status);
+                formData.append('latitude', position.coords.latitude);
+                formData.append('longitude', position.coords.longitude);
+                formData.append('accuracy', position.coords.accuracy);
+
+                fetch(`/custom-admin/portal/employees/delivery/${assignmentId}/update/`, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'),
+                        },
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert(data.error);
+                        }
+                    });
+            }, error => {
+                alert('Unable to get your location. Please enable GPS.');
+            });
+        } else {
+            alert('Geolocation is not supported by your browser.');
+        }
+    }
+
+    function markDelivered(assignmentId) {
+        if (confirm('Are you sure you have delivered the order? This will mark it as completed.')) {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const formData = new FormData();
+                    formData.append('status', 'delivered');
+                    formData.append('latitude', position.coords.latitude);
+                    formData.append('longitude', position.coords.longitude);
+                    formData.append('accuracy', position.coords.accuracy);
+
+                    // Add delivery photo if available
+                    const photoInput = document.createElement('input');
+                    photoInput.type = 'file';
+                    photoInput.accept = 'image/*';
+                    photoInput.onchange = (e) => {
+                        formData.append('delivery_photo', e.target.files[0]);
+                        submitDelivery(formData, assignmentId);
+                    };
+                    photoInput.click();
+
+                    function submitDelivery(formData, assignmentId) {
+                        fetch(`/custom-admin/portal/employees/delivery/${assignmentId}/update/`, {
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    'X-CSRFToken': getCookie('csrftoken'),
+                                },
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    location.reload();
+                                } else {
+                                    alert(data.error);
+                                }
+                            });
+                    }
+                }, error => {
+                    alert('Unable to verify your location. Please enable GPS to mark as delivered.');
+                });
+            } else {
+                alert('Geolocation is not supported by your browser.');
+            }
+        }
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends 'base.html' %} {% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>{% if truck %}Edit Truck{% else %}Add New Truck{% endif %}</h2>
+            <p class="text-muted">Fill in the truck details below</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %} {% if truck %}
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Truck Number</label>
+                        <input type="text" class="form-control" value="{{ truck.truck_number }}" disabled readonly>
+                        <small class="text-muted">Truck number cannot be changed</small>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">License Plate *</label>
+                        <input type="text" class="form-control" name="license_plate" value="{% if truck %}{{ truck.license_plate }}{% endif %}" placeholder="B123BCD" required>
+                        <small class="text-muted">Format: Letter followed by 3 numbers and 3 letters (e.g., B123BCD)</small>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Capacity (kg) *</label>
+                        <input type="number" step="100" class="form-control" name="capacity_kg" value="{% if truck %}{{ truck.capacity_kg }}{% endif %}" placeholder="5000" required>
+                        <small class="text-muted">Between 1,000 kg (1 ton) and 30,000 kg (30 tons)</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Model</label>
+                        <input type="text" class="form-control" name="model" value="{% if truck %}{{ truck.model|default:'' }}{% endif %}" placeholder="e.g., Isuzu NPR">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Year</label>
+                        <input type="number" class="form-control" name="year" value="{% if truck %}{{ truck.year|default:'' }}{% endif %}" placeholder="2022">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label class="form-label">Assign Driver</label>
+                        <select class="form-select" name="assigned_driver_id">
+                            <option value="">-- Select Driver --</option>
+                            {% for driver in available_drivers %}
+                            <option value="{{ driver.id }}" {% if truck.assigned_driver_id == driver.id %}selected{% endif %}>
+                                {{ driver.first_name }} {{ driver.last_name }} ({{ driver.email }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Only drivers not already assigned to a truck are shown</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" name="is_available" id="is_available" {% if truck.is_available or not truck %}checked{% endif %}>
+                            <label class="form-check-label" for="is_available">Available for Delivery</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" name="is_operational" id="is_operational" {% if truck.is_operational or not truck %}checked{% endif %}>
+                            <label class="form-check-label" for="is_operational">Operational</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary">Save Truck</button>
+                    <a href="/custom-admin/portal/trucks/" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

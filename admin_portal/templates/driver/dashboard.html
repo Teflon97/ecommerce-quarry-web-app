@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Dashboard - Quarry Market</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #1a1a2e;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 280px;
+            background: linear-gradient(135deg, #d4a017 0%, #b8860b 100%);
+            overflow-y: auto;
+            z-index: 1000;
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.9);
+            padding: 0.75rem 1rem;
+            margin: 0.2rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: block;
+        }
+        
+        .sidebar .nav-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            transform: translateX(5px);
+        }
+        
+        .sidebar .nav-link.active {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+        }
+        
+        .sidebar .nav-link i {
+            margin-right: 10px;
+        }
+        
+        .main-content {
+            margin-left: 280px;
+            min-height: 100vh;
+        }
+        
+        .navbar-custom {
+            background-color: #16213e;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            padding: 1rem 1.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            color: white;
+        }
+        
+        #deliveryMap {
+            height: calc(100vh - 100px);
+            width: 100%;
+            border-radius: 10px;
+            background-color: #0f3460;
+        }
+        
+        .leaflet-container {
+            height: calc(100vh - 100px);
+            width: 100%;
+            border-radius: 10px;
+            background-color: #0f3460;
+        }
+        
+        .notification-badge {
+            position: relative;
+        }
+        
+        .notification-count {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background: #dc3545;
+            color: white;
+            border-radius: 50%;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        
+        .online-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #28a745;
+            border-radius: 50%;
+            margin-left: 5px;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.5;
+                transform: scale(1.2);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        .driver-status {
+            background: #d4a017;
+            color: #1a1a2e;
+            padding: 0.25rem 0.75rem;
+            border-radius: 2rem;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        
+        .map-legend {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            min-width: 150px;
+            color: #333;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+        
+        .legend-item:hover {
+            opacity: 0.7;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .legend-color.completed {
+            background: #28a745;
+        }
+        
+        .legend-color.active {
+            background: #d4a017;
+        }
+        
+        .legend-color.all {
+            background: #007bff;
+        }
+        
+        .legend-color.none {
+            background: #6c757d;
+        }
+        
+        .delivery-popup {
+            min-width: 280px;
+        }
+        
+        .route-btn,
+        .file-btn {
+            margin-top: 8px;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .route-btn {
+            background: #d4a017;
+            color: white;
+        }
+        
+        .route-btn:hover {
+            background: #b8860b;
+        }
+        
+        .file-btn {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .file-btn:hover {
+            background: #138496;
+        }
+        
+        .modal-content {
+            color: #333;
+        }
+        
+        .leaflet-routing-container {
+            display: none !important;
+        }
+        /* Route Directions Panel - Always Visible */
+        
+        .route-directions-panel {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            min-width: 300px;
+            color: #333;
+            border: 2px solid #d4a017;
+        }
+        
+        .route-directions-panel h6 {
+            color: #16213e;
+            font-weight: bold;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #d4a017;
+        }
+        
+        .route-stats-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            margin: 5px 5px 5px 0;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        
+        .instruction-step {
+            padding: 8px 5px;
+            border-bottom: 1px solid #eee;
+            font-size: 0.9em;
+            color: #333;
+        }
+        
+        .instruction-step i {
+            margin-right: 8px;
+            color: #d4a017;
+        }
+        
+        .leaflet-interactive {
+            cursor: pointer !important;
+            transition: all 0.3s;
+        }
+        
+        .leaflet-interactive:hover {
+            stroke-width: 8 !important;
+        }
+        
+        .selected-route {
+            stroke-width: 8 !important;
+            filter: drop-shadow(0 0 8px rgba(212, 160, 23, 0.5));
+        }
+        
+        .route-label {
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+            pointer-events: none;
+            z-index: 1000;
+        }
+        
+        .no-routes-message {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .route-info-header {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sidebar">
+        <div class="d-flex flex-column p-3">
+            <div class="text-center mb-4">
+                <h4 class="text-white">Driver Portal</h4>
+                <small class="text-white-50">Quarry Market Delivery</small>
+            </div>
+            <ul class="nav nav-pills flex-column mb-auto">
+                <li class="nav-item"><a href="/driver/dashboard/" class="nav-link active"><i class="bi bi-speedometer2"></i> Dashboard</a></li>
+                <li class="nav-item"><a href="/driver/notifications/" class="nav-link notification-badge" id="notificationsLink"><i class="bi bi-bell"></i> Notifications<span class="notification-count" id="notificationCount" style="display: none;">0</span></a></li>
+            </ul>
+            <hr class="text-white-50">
+            <div class="dropdown">
+                <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="bi bi-person-circle me-2 fs-5"></i>
+                    <strong>{{ user_name|default:"Driver" }}</strong>
+                    <span class="online-dot"></span>
+                </a>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item text-danger" href="/custom-admin/login/logout/"><i class="bi bi-box-arrow-right"></i> Sign out</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <nav class="navbar-custom">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="mb-0">{{ user_name|default:"Driver" }}</h4>
+                    <p class="mb-0 opacity-75">Live delivery tracking</p>
+                </div>
+                <div>
+                    <span class="driver-status me-2"><i class="bi bi-geo-alt-fill"></i> Live Tracking Active</span>
+                    <button class="btn btn-outline-light" id="refreshBtn"><i class="bi bi-arrow-repeat"></i> Refresh</button>
+                    <button class="btn btn-outline-light ms-2" id="clearRoutesBtn"><i class="bi bi-x-circle"></i> Clear Routes</button>
+                </div>
+            </div>
+        </nav>
+        <div class="p-3">
+            <div class="card bg-dark text-white">
+                <div class="card-header bg-dark border-secondary">
+                    <h5 class="mb-0"><i class="bi bi-map"></i> Live Delivery Map</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div id="deliveryMap">
+                        <div class="text-center text-white py-4">Loading map...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Complete Delivery Modal -->
+    <div class="modal fade" id="completeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Complete Delivery</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="completeDeliveryId">
+                    <div class="mb-3">
+                        <label class="form-label">Delivery Notes</label>
+                        <textarea class="form-control" id="deliveryNotes" rows="3" placeholder="Enter delivery notes..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Distance (km)</label>
+                        <input type="number" step="0.1" class="form-control" id="distanceKm" placeholder="Distance traveled" readonly style="background-color: #e9ecef;">
+                        <small class="text-muted">Distance from selected route</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Total Weight (kg)</label>
+                        <input type="number" step="0.1" class="form-control" id="totalWeight" placeholder="Total weight delivered">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" onclick="submitCompleteDelivery()">Complete Delivery</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+    <script>
+        // Global variables
+        let map = null;
+        let currentRoute = null;
+        let deliveryMarkers = {};
+        let deliveries = [];
+        let currentFilter = 'all';
+        let currentRouteData = {};
+        let routeLayers = {};
+        let selectedRouteIndex = 0;
+        let currentDeliveryId = null;
+        let selectedRouteForDelivery = {}; // Store selected route index per delivery
+
+        const QUARRY_CENTER = [-24.49851, 26.02472];
+        const ROUTE_COLORS = ['#d4a017', '#17a2b8', '#6c5ce7', '#e74c3c', '#27ae60'];
+
+        function getStatusDisplay(status) {
+            const display = {
+                'accepted': 'Accepted',
+                'loading': 'Loading at Quarry',
+                'in_transit': 'In Transit',
+                'delivered': 'Delivered',
+                'assigned': 'Assigned'
+            };
+            return display[status] || status;
+        }
+
+        function initMap() {
+            if (typeof L === 'undefined') {
+                setTimeout(initMap, 500);
+                return;
+            }
+
+            const mapContainer = document.getElementById('deliveryMap');
+            if (!mapContainer) return;
+            mapContainer.innerHTML = '';
+
+            // Initialize map with Quarry center
+            map = L.map('deliveryMap', {
+                center: QUARRY_CENTER,
+                zoom: 13,
+                zoomControl: true
+            });
+
+            // Use CartoDB Voyager tiles (no 403 errors, reliable)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+
+            // Quarry Market pin
+            const quarryIcon = L.divIcon({
+                html: `<svg width="32" height="42" viewBox="0 0 32 42" style="filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));">
+                    <path d="M16 0C7.164 0 0 7.164 0 16c0 9.1 16 26 16 26s16-16.9 16-26c0-8.836-7.164-16-16-16z" fill="#d4a017"/>
+                    <circle cx="16" cy="15" r="7" fill="white"/>
+                    <circle cx="16" cy="15" r="3" fill="#d4a017"/>
+                </svg>`,
+                iconSize: [32, 42],
+                iconAnchor: [16, 42],
+                popupAnchor: [0, -38],
+                className: 'quarry-pin'
+            });
+
+            L.marker(QUARRY_CENTER, {
+                icon: quarryIcon,
+                zIndexOffset: 1000
+            }).addTo(map).bindPopup('<strong>Quarry Market</strong><br>Starting Point');
+
+            // Legend control
+            const legend = L.control({
+                position: 'bottomright'
+            });
+
+            legend.onAdd = function() {
+                const div = L.DomUtil.create('div', 'map-legend');
+                div.innerHTML = `<h6>Filter Deliveries</h6>
+                    <div class="legend-item" onclick="filterDeliveries('all')"><div class="legend-color all"></div><span>All Deliveries</span></div>
+                    <div class="legend-item" onclick="filterDeliveries('active')"><div class="legend-color active"></div><span>Active (Accepted/Loading/In Transit)</span></div>
+                    <div class="legend-item" onclick="filterDeliveries('completed')"><div class="legend-color completed"></div><span>Completed</span></div>
+                    <div class="legend-item" onclick="filterDeliveries('none')"><div class="legend-color none"></div><span>None</span></div>`;
+                return div;
+            };
+            legend.addTo(map);
+
+            setTimeout(() => map.invalidateSize(), 200);
+            loadDeliveries();
+            setInterval(loadDeliveries, 30000);
+        }
+
+        function filterDeliveries(filter) {
+            currentFilter = filter;
+            clearAllRoutes();
+            updateMapMarkers();
+        }
+
+        function loadDeliveries() {
+            fetch('/driver/deliveries/').then(response => response.json()).then(data => {
+                if (data.deliveries) {
+                    deliveries = data.deliveries;
+                    updateMapMarkers();
+                    checkNotifications();
+                    checkAutoShowRoute();
+                }
+            }).catch(error => console.error('Error loading deliveries:', error));
+        }
+
+        function showRouteFromQuarry(deliveryId) {
+            const delivery = deliveries.find(d => d.id === deliveryId);
+            if (!delivery) return;
+
+            currentDeliveryId = deliveryId;
+            let lat = delivery.latitude || (delivery.delivery_location ? delivery.delivery_location.lat : null);
+            let lng = delivery.longitude || (delivery.delivery_location ? delivery.delivery_location.lng : null);
+
+            if (lat && lng) {
+                clearAllRoutes();
+
+                const waypoints = [L.latLng(QUARRY_CENTER[0], QUARRY_CENTER[1]), L.latLng(lat, lng)];
+
+                currentRoute = L.Routing.control({
+                    waypoints: waypoints,
+                    routeWhileDragging: false,
+                    showAlternatives: true,
+                    altLineOptions: {
+                        styles: [{
+                            color: ROUTE_COLORS[1],
+                            weight: 5,
+                            opacity: 0.8
+                        }, {
+                            color: ROUTE_COLORS[2],
+                            weight: 5,
+                            opacity: 0.8
+                        }]
+                    },
+                    fitSelectedRoutes: true,
+                    lineOptions: {
+                        styles: [{
+                            color: ROUTE_COLORS[0],
+                            weight: 6
+                        }],
+                        extendToWaypoints: true,
+                        missingRouteTolerance: 10
+                    },
+                    router: L.Routing.osrmv1({
+                        serviceUrl: 'https://router.project-osrm.org/route/v1',
+                        profile: 'driving'
+                    }),
+                    createMarker: function() {
+                        return null;
+                    },
+                    addWaypoints: false,
+                    draggableWaypoints: false,
+                    show: false,
+                    collapsible: true,
+                    routeDragInterval: 500
+                }).addTo(map);
+
+                currentRoute.on('routesfound', function(e) {
+                    const routes = e.routes;
+                    const filteredRoutes = filterRealisticRoutes(routes);
+                    currentRouteData[deliveryId] = filteredRoutes;
+
+                    storeRouteLayers(deliveryId, filteredRoutes);
+
+                    if (filteredRoutes && filteredRoutes.length > 0) {
+                        const bestRoute = filteredRoutes[0];
+                        const distance = (bestRoute.summary.totalDistance / 1000).toFixed(1);
+                        currentRouteData[deliveryId + '_distance'] = distance;
+                        currentRouteData[deliveryId + '_time'] = Math.round(bestRoute.summary.totalTime / 60);
+                    }
+
+                    // Auto-select first route
+                    selectedRouteIndex = 0;
+                    selectedRouteForDelivery[deliveryId] = 0;
+                    highlightSelectedRoute(deliveryId, 0);
+                    showRouteDirections(deliveryId, 0, filteredRoutes);
+                });
+
+                let bounds = L.latLngBounds([QUARRY_CENTER, [lat, lng]]);
+                map.fitBounds(bounds.pad(0.1));
+            }
+        }
+
+        function filterRealisticRoutes(routes) {
+            if (routes.length <= 1) return routes;
+
+            const sortedRoutes = [...routes].sort((a, b) =>
+                a.summary.totalDistance - b.summary.totalDistance
+            );
+
+            const minDistance = sortedRoutes[0].summary.totalDistance;
+            const realisticRoutes = sortedRoutes.filter(route =>
+                route.summary.totalDistance <= minDistance * 1.5
+            );
+
+            return realisticRoutes.slice(0, 3);
+        }
+
+        function storeRouteLayers(deliveryId, routes) {
+            if (routeLayers[deliveryId]) {
+                routeLayers[deliveryId].forEach(layer => {
+                    if (layer) map.removeLayer(layer);
+                });
+            }
+
+            if (routeLayers[deliveryId + '_labels']) {
+                routeLayers[deliveryId + '_labels'].forEach(label => {
+                    if (label) map.removeLayer(label);
+                });
+            }
+
+            routeLayers[deliveryId] = [];
+            routeLayers[deliveryId + '_labels'] = [];
+
+            routes.forEach((route, index) => {
+                const coordinates = route.coordinates.map(coord => [coord.lat, coord.lng]);
+                const polyline = L.polyline(coordinates, {
+                    color: ROUTE_COLORS[index],
+                    weight: index === 0 ? 6 : 5,
+                    opacity: 0.8,
+                    className: `route-${index}`
+                }).addTo(map);
+
+                // Click handler for route selection
+                polyline.on('click', function(e) {
+                    L.DomEvent.stopPropagation(e);
+                    selectRouteByClick(deliveryId, index, routes);
+                });
+
+                polyline.on('mouseover', function() {
+                    this.setStyle({
+                        weight: index === selectedRouteForDelivery[deliveryId] ? 8 : 7
+                    });
+                });
+
+                polyline.on('mouseout', function() {
+                    this.setStyle({
+                        weight: selectedRouteForDelivery[deliveryId] === index ? 8 : (index === 0 ? 6 : 5)
+                    });
+                });
+
+                addRouteLabels(deliveryId, route, index);
+                routeLayers[deliveryId].push(polyline);
+            });
+        }
+
+        function addRouteLabels(deliveryId, route, routeIndex) {
+            const coordinates = route.coordinates;
+            const midIndex = Math.floor(coordinates.length / 2);
+            const midPoint = coordinates[midIndex];
+
+            const distance = (route.summary.totalDistance / 1000).toFixed(1);
+            const time = Math.round(route.summary.totalTime / 60);
+
+            const labelIcon = L.divIcon({
+                html: `<div style="background: ${ROUTE_COLORS[routeIndex]}; color: white; padding: 5px 12px; border-radius: 20px; font-size: 13px; font-weight: bold; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;">
+                    ${distance} km • ${time} min
+                </div>`,
+                className: 'route-label',
+                iconSize: [120, 35]
+            });
+
+            const label = L.marker([midPoint.lat, midPoint.lng], {
+                icon: labelIcon,
+                interactive: false
+            }).addTo(map);
+
+            routeLayers[deliveryId + '_labels'].push(label);
+        }
+
+        function selectRouteByClick(deliveryId, routeIndex, routes) {
+            selectedRouteForDelivery[deliveryId] = routeIndex;
+            selectedRouteIndex = routeIndex;
+
+            highlightSelectedRoute(deliveryId, routeIndex);
+            showRouteDirections(deliveryId, routeIndex, routes);
+
+            // Store distance and time for this route
+            const route = routes[routeIndex];
+            const distance = (route.summary.totalDistance / 1000).toFixed(1);
+            const time = Math.round(route.summary.totalTime / 60);
+            currentRouteData[deliveryId + '_distance'] = distance;
+            currentRouteData[deliveryId + '_time'] = time;
+            currentRouteData[deliveryId + '_selected_route'] = routeIndex;
+        }
+
+        function highlightSelectedRoute(deliveryId, selectedIndex) {
+            if (!routeLayers[deliveryId]) return;
+
+            routeLayers[deliveryId].forEach((layer, index) => {
+                if (index === selectedIndex) {
+                    layer.setStyle({
+                        weight: 8,
+                        opacity: 1,
+                        className: `route-${index} selected-route`
+                    });
+                    layer.bringToFront();
+                } else {
+                    layer.setStyle({
+                        weight: 4,
+                        opacity: 0.4
+                    });
+                }
+            });
+        }
+
+        function showRouteDirections(deliveryId, routeIndex, routes) {
+            // Remove existing directions panel
+            const existingPanel = document.getElementById('directionsPanel');
+            if (existingPanel) existingPanel.remove();
+
+            const route = routes[routeIndex];
+            if (!route) return;
+
+            const panel = L.control({
+                position: 'bottomleft'
+            });
+
+            panel.onAdd = function() {
+                    const div = L.DomUtil.create('div', 'route-directions-panel');
+                    div.id = 'directionsPanel';
+
+                    const distance = (route.summary.totalDistance / 1000).toFixed(1);
+                    const time = Math.round(route.summary.totalTime / 60);
+                    const routeColor = ROUTE_COLORS[routeIndex];
+
+                    let html = `
+                    <h6>
+                        <i class="bi bi-signpost-split"></i> 
+                        Route ${routeIndex + 1} Directions
+                    </h6>
+                    <div class="route-info-header">
+                        <span class="route-stats-badge" style="background: ${routeColor}; color: white;">
+                            <i class="bi bi-rulers"></i> ${distance} km
+                        </span>
+                        <span class="route-stats-badge" style="background: ${routeColor}; color: white;">
+                            <i class="bi bi-clock"></i> ${time} min
+                        </span>
+                        ${routes.length > 1 ? `
+                            <div style="margin-top: 10px;">
+                                <small style="color: #666;">Click on any route line to switch</small><br>
+                    ` : ''}
+                `;
+                
+                // Add route options if multiple
+                if (routes.length > 1) {
+                    routes.forEach((r, idx) => {
+                        const d = (r.summary.totalDistance / 1000).toFixed(1);
+                        const t = Math.round(r.summary.totalTime / 60);
+                        const isSelected = idx === routeIndex;
+                        html += `
+                            <button 
+                                onclick="selectRouteByClick('${deliveryId}', ${idx}, currentRouteData['${deliveryId}'])"
+                                style="margin: 3px; padding: 5px 10px; background: ${ROUTE_COLORS[idx]}; 
+                                       color: white; border: ${isSelected ? '3px solid white' : 'none'}; 
+                                       border-radius: 5px; cursor: pointer; font-size: 12px;"
+                            >
+                                Route ${idx + 1}: ${d}km/${t}min ${isSelected ? '✓' : ''}
+                            </button>
+                        `;
+                    });
+                    html += '</div>';
+                }
+                
+                html += '</div><div style="max-height: 250px; overflow-y: auto; margin-top: 10px;">';
+                
+                route.instructions.forEach((instruction, idx) => {
+                    const icon = getDirectionIcon(instruction.type);
+                    html += `
+                        <div class="instruction-step">
+                            <i class="bi ${icon}"></i> 
+                            ${instruction.text} 
+                            <small class="text-muted">(${(instruction.distance / 1000).toFixed(1)} km)</small>
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+                
+                div.innerHTML = html;
+                return div;
+            };
+            
+            panel.addTo(map);
+        }
+
+        function getDirectionIcon(type) {
+            const icons = {
+                'Straight': 'bi-arrow-up',
+                'SlightRight': 'bi-arrow-up-right',
+                'Right': 'bi-arrow-right',
+                'SharpRight': 'bi-arrow-90deg-right',
+                'SlightLeft': 'bi-arrow-up-left',
+                'Left': 'bi-arrow-left',
+                'SharpLeft': 'bi-arrow-90deg-left',
+                'Uturn': 'bi-arrow-return-left',
+                'EnterRoundabout': 'bi-arrow-repeat',
+                'ExitRoundabout': 'bi-arrow-right',
+                'DestinationReached': 'bi-geo-alt-fill',
+                'StartAt': 'bi-play-fill',
+                'TurnAround': 'bi-arrow-return-right'
+            };
+            return icons[type] || 'bi-dot';
+        }
+
+        function clearAllRoutes() {
+            if (currentRoute) {
+                map.removeControl(currentRoute);
+                currentRoute = null;
+            }
+            
+            Object.keys(routeLayers).forEach(key => {
+                if (Array.isArray(routeLayers[key])) {
+                    routeLayers[key].forEach(layer => {
+                        if (layer) map.removeLayer(layer);
+                    });
+                }
+            });
+            routeLayers = {};
+            
+            const directionsPanel = document.getElementById('directionsPanel');
+            if (directionsPanel) directionsPanel.remove();
+            
+            currentDeliveryId = null;
+        }
+
+        function createPopupContent(delivery) {
+            return `
+                <div class="delivery-popup">
+                    <strong>${delivery.delivery_number || 'Delivery'}</strong><br>
+                    Status: ${getStatusDisplay(delivery.status)}<br>
+                    Address: ${delivery.delivery_address || 'N/A'}<br>
+                    <button class="route-btn" onclick="showRouteFromQuarry('${delivery.id}')">
+                        <i class="bi bi-signpost"></i> Show Route from Quarry
+                    </button>
+                    <button class="file-btn" onclick="openCompleteModal('${delivery.id}')">
+                        <i class="bi bi-check-circle"></i> Complete Delivery
+                    </button>
+                </div>
+            `;
+        }
+
+        function updateMapMarkers() {
+            if (!map) return;
+            
+            Object.values(deliveryMarkers).forEach(m => map.removeLayer(m));
+            deliveryMarkers = {};
+            
+            for (let i = 0; i < deliveries.length; i++) {
+                let delivery = deliveries[i];
+                
+                if (currentFilter === 'active' && delivery.status === 'delivered') continue;
+                if (currentFilter === 'completed' && delivery.status !== 'delivered') continue;
+                if (currentFilter === 'none') continue;
+                
+                let lat = delivery.latitude || (delivery.delivery_location ? delivery.delivery_location.lat : null);
+                let lng = delivery.longitude || (delivery.delivery_location ? delivery.delivery_location.lng : null);
+                
+                if (lat && lng) {
+                    let markerColor, markerIcon;
+                    if (delivery.status === 'delivered') {
+                        markerColor = '#28a745';
+                        markerIcon = '✅';
+                    } else if (delivery.status === 'in_transit') {
+                        markerColor = '#007bff';
+                        markerIcon = '🚚';
+                    } else if (delivery.status === 'loading') {
+                        markerColor = '#fd7e14';
+                        markerIcon = '📦';
+                    } else if (delivery.status === 'accepted') {
+                        markerColor = '#d4a017';
+                        markerIcon = '📋';
+                    } else {
+                        markerColor = '#6c757d';
+                        markerIcon = '📍';
+                    }
+                    
+                    const icon = L.divIcon({
+                        html: '<div style="background: ' + markerColor + '; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3); font-size: 16px;">' + markerIcon + '</div>',
+                        iconSize: [32, 32],
+                        className: 'custom-marker'
+                    });
+                    
+                    const marker = L.marker([lat, lng], {
+                        icon: icon
+                    }).addTo(map);
+                    
+                    marker.bindPopup(createPopupContent(delivery));
+                    deliveryMarkers[delivery.id] = marker;
+                }
+            }
+        }
+
+        function checkAutoShowRoute() {
+            var deliveryId = sessionStorage.getItem('autoShowRoute');
+            if (deliveryId) {
+                sessionStorage.removeItem('autoShowRoute');
+                setTimeout(function() {
+                    showRouteFromQuarry(deliveryId);
+                    // Find and highlight the delivery marker
+                    if (deliveryMarkers[deliveryId]) {
+                        deliveryMarkers[deliveryId].openPopup();
+                    }
+                }, 1000);
+            }
+        }
+
+        function openCompleteModal(deliveryId) {
+            const delivery = deliveries.find(d => d.id === deliveryId);
+            document.getElementById('completeDeliveryId').value = deliveryId;
+            document.getElementById('deliveryNotes').value = '';
+            
+            // Auto-fill distance from the selected route
+            const distance = currentRouteData[deliveryId + '_distance'] || '';
+            document.getElementById('distanceKm').value = distance;
+            document.getElementById('totalWeight').value = '';
+            
+            new bootstrap.Modal(document.getElementById('completeModal')).show();
+        }
+
+        function submitCompleteDelivery() {
+            const deliveryId = document.getElementById('completeDeliveryId').value;
+            const deliveryNotes = document.getElementById('deliveryNotes').value;
+            const distanceKm = parseFloat(document.getElementById('distanceKm').value);
+            const totalWeight = parseFloat(document.getElementById('totalWeight').value);
+            
+            fetch(`/driver/delivery/${deliveryId}/update-status/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    status: 'delivered',
+                    delivery_notes: deliveryNotes,
+                    distance_km: distanceKm,
+                    total_weight_kg: totalWeight,
+                    actual_delivery_time: new Date().toISOString()
+                })
+            }).then(response => response.json()).then(data => {
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('completeModal')).hide();
+                    clearAllRoutes();
+                    loadDeliveries();
+                    alert('Delivery completed successfully!');
+                } else {
+                    alert('Failed to complete delivery: ' + (data.error || 'Unknown error'));
+                }
+            }).catch(error => {
+                console.error('Error:', error);
+                alert('Error completing delivery');
+            });
+        }
+
+        function checkNotifications() {
+            fetch('/driver/notifications/count/').then(response => response.json()).then(data => {
+                let count = data.notifications || 0;
+                let badge = document.getElementById('notificationCount');
+                if (count > 0) {
+                    badge.textContent = count;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }).catch(e => console.error(e));
+        }
+
+        function getCookie(name) {
+            let value = null;
+            if (document.cookie) {
+                let cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    let cookie = cookies[i].trim();
+                    if (cookie.startsWith(name + '=')) {
+                        value = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return value;
+        }
+
+        // Expose functions to global scope
+        window.showRouteFromQuarry = showRouteFromQuarry;
+        window.selectRouteByClick = selectRouteByClick;
+        window.filterDeliveries = filterDeliveries;
+        window.openCompleteModal = openCompleteModal;
+        window.submitCompleteDelivery = submitCompleteDelivery;
+        window.clearAllRoutes = clearAllRoutes;
+
+        // Event listeners
+        document.getElementById('refreshBtn').addEventListener('click', function() {
+            clearAllRoutes();
+            loadDeliveries();
+        });
+        
+        document.getElementById('clearRoutesBtn').addEventListener('click', function() {
+            clearAllRoutes();
+        });
+        
+        document.addEventListener('DOMContentLoaded', initMap);
+        
+        // Periodic updates
+        setInterval(checkNotifications, 30000);
+    </script>
+</body>
+
+</html>

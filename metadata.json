@@ -1,0 +1,7 @@
+{
+  "name": "Quarry Market",
+  "description": "A web application that allows users to order different types of sand and quarry materials quickly and easily, with features for location-based delivery, online payments, and order tracking.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

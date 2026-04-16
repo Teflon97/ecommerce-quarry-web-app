@@ -1,0 +1,470 @@
+{% extends 'base.html' %} {% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Orders Management</h2>
+            <p class="text-muted">View and assign orders to drivers</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" onclick="location.reload()">
+                <i class="bi bi-arrow-repeat"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <label class="form-label">Filter by Status</label>
+                    <select class="form-select" id="statusFilter">
+                        <option value="all">All Orders</option>
+                        <option value="pending">Pending</option>
+                        <option value="processing">Processing</option>
+                        <option value="assigned">Assigned</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Filter by Payment</label>
+                    <select class="form-select" id="paymentFilter">
+                        <option value="all">All</option>
+                        <option value="paid">Paid</option>
+                        <option value="pending">Pending</option>
+                        <option value="failed">Failed</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Search</label>
+                    <input type="text" class="form-control" id="searchInput" placeholder="Search by order ID or customer...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary w-100" onclick="applyFilters()">
+                        <i class="bi bi-funnel"></i> Apply
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Orders Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">All Orders</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Order ID</th>
+                            <th>Customer</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Payment</th>
+                            <th>Delivery Address</th>
+                            <th>Created At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ordersTableBody">
+                        {% for order in orders %} {% with has_pending=order.has_pending_request|default:False %} {% if order.payment_status == 'failed' or order.status == 'assigned' or has_pending %}
+                        <tr class="order-row table-secondary opacity-75" data-order-id="{{ order.id }}" style="cursor: pointer;">
+                            {% else %}
+                            <tr class="order-row" data-order-id="{{ order.id }}" style="cursor: pointer;">
+                                {% endif %}
+                                <td><code>{{ order.id|slice:":8" }}...</code></td>
+                                <td><strong>{{ order.customer }}</strong></td>
+                                <td>${{ order.total|floatformat:2 }}</strong>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{% if order.status == 'delivered' %}success{% elif order.status == 'assigned' %}info{% elif order.status == 'processing' %}primary{% elif order.status == 'pending' %}warning{% else %}secondary{% endif %}">
+                                    {{ order.status|title }}
+                                </span>
+                                    </strong>
+                                    <td>
+                                        <span class="badge bg-{% if order.payment_status == 'paid' %}success{% elif order.payment_status == 'pending' %}warning{% else %}danger{% endif %}">
+                                    {{ order.payment_status|title }}
+                                </span>
+                                        </strong>
+                                        <td>
+                                            {% if order.delivery_location %} {% if order.delivery_location.address %} {{ order.delivery_location.address|truncatechars:40 }} {% else %} {{ order.delivery_location|truncatechars:40 }} {% endif %} {% else %} N/A {% endif %}
+                                            </strong>
+                                            <td>{{ order.created_at|slice:":10" }}</strong>
+                                                <td>
+                                                    {% if order.payment_status == 'failed' %}
+                                                    <button class="btn btn-sm btn-secondary" disabled title="Cannot assign - Payment failed">
+                                    <i class="bi bi-x-circle"></i> Payment Failed
+                                </button> {% elif order.status == 'assigned' %}
+                                                    <button class="btn btn-sm btn-secondary" disabled title="Already assigned">
+                                    <i class="bi bi-check-circle"></i> Assigned
+                                </button> {% elif has_pending %}
+                                                    <button class="btn btn-sm btn-warning" disabled title="Pending driver response">
+                                    <i class="bi bi-clock-history"></i> Pending
+                                </button> {% else %}
+                                                    <button class="btn btn-sm btn-success assign-btn" data-order-id="{{ order.id }}" data-order-customer="{{ order.customer }}">
+                                    <i class="bi bi-truck"></i> Assign
+                                </button> {% endif %}
+                                                    </strong>
+                            </tr>
+                            {% endwith %} {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center text-muted py-4">
+                                    No orders found
+                                    </strong>
+                            </tr>
+                            {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assign Modal -->
+<div class="modal fade" id="assignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assign Order to Driver</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Order ID</label>
+                    <input type="text" class="form-control" id="assignOrderId" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Customer</label>
+                    <input type="text" class="form-control" id="assignCustomer" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Select Driver</label>
+                    <select class="form-select" id="assignDriverId" required>
+                        <option value="">-- Select Driver --</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Notes (Optional)</label>
+                    <textarea class="form-control" id="assignNotes" rows="2" placeholder="Add any special instructions for the driver..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitAssignment()">Assign Delivery</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Order History Modal -->
+<div class="modal fade" id="historyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Order History</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="historyModalBody">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let allOrders = [];
+    let drivers = [];
+
+    // Load drivers for assign modal
+    function loadDrivers() {
+        fetch('/custom-admin/portal/api/employees/')
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                drivers = data.filter(function(emp) {
+                    return emp.role === 'Driver' && emp.is_active === true;
+                });
+                var driverSelect = document.getElementById('assignDriverId');
+                var options = '<option value="">-- Select Driver --</option>';
+                for (var i = 0; i < drivers.length; i++) {
+                    options += '<option value="' + drivers[i].employee_id + '">' + drivers[i].first_name + ' ' + drivers[i].last_name + ' - Capacity: ' + (drivers[i].max_load_capacity_kg || 'N/A') + ' kg</option>';
+                }
+                driverSelect.innerHTML = options;
+            })
+            .catch(function(error) {
+                console.error('Error loading drivers:', error);
+            });
+    }
+
+    // Apply filters
+    function applyFilters() {
+        var status = document.getElementById('statusFilter').value;
+        var payment = document.getElementById('paymentFilter').value;
+        var search = document.getElementById('searchInput').value.toLowerCase();
+
+        var rows = document.querySelectorAll('#ordersTableBody tr');
+
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            if (row.querySelector('td[colspan]')) continue;
+
+            var orderStatus = row.cells[3] ? row.cells[3].innerText.toLowerCase() : '';
+            var paymentStatus = row.cells[4] ? row.cells[4].innerText.toLowerCase() : '';
+            var orderId = row.cells[0] ? row.cells[0].innerText.toLowerCase() : '';
+            var customer = row.cells[1] ? row.cells[1].innerText.toLowerCase() : '';
+
+            var show = true;
+
+            if (status !== 'all' && orderStatus.indexOf(status) === -1) show = false;
+            if (payment !== 'all' && paymentStatus.indexOf(payment) === -1) show = false;
+            if (search && orderId.indexOf(search) === -1 && customer.indexOf(search) === -1) show = false;
+
+            row.style.display = show ? '' : 'none';
+        }
+    }
+
+    // Show assign modal
+    function showAssignModal(orderId, customer) {
+        document.getElementById('assignOrderId').value = orderId;
+        document.getElementById('assignCustomer').value = customer;
+        document.getElementById('assignNotes').value = '';
+        new bootstrap.Modal(document.getElementById('assignModal')).show();
+    }
+
+    // Submit assignment
+    function submitAssignment() {
+        var orderId = document.getElementById('assignOrderId').value;
+        var driverId = document.getElementById('assignDriverId').value;
+        var notes = document.getElementById('assignNotes').value;
+
+        if (!driverId) {
+            alert('Please select a driver');
+            return;
+        }
+
+        var submitBtn = document.querySelector('#assignModal .btn-primary');
+        var originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Assigning...';
+        submitBtn.disabled = true;
+
+        fetch('/custom-admin/portal/orders/' + orderId + '/assign/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    driver_id: driverId,
+                    notes: notes
+                })
+            })
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.success) {
+                    bootstrap.Modal.getInstance(document.getElementById('assignModal')).hide();
+                    location.reload();
+                } else {
+                    alert('Failed to assign: ' + (data.error || 'Unknown error'));
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                }
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                alert('Error assigning order');
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
+    }
+
+    // Show order history modal
+    function showOrderHistory(orderId) {
+        var modalBody = document.getElementById('historyModalBody');
+        modalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>';
+        new bootstrap.Modal(document.getElementById('historyModal')).show();
+
+        fetch('/custom-admin/portal/orders/' + orderId + '/history/')
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                displayOrderHistory(data);
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                modalBody.innerHTML = '<div class="alert alert-danger">Error loading order history</div>';
+            });
+    }
+
+    function displayOrderHistory(data) {
+        var modalBody = document.getElementById('historyModalBody');
+        var order = data.order;
+        var requests = data.requests || [];
+        var activeRequest = data.active_request;
+
+        var address = 'N/A';
+        if (order.delivery_location) {
+            if (order.delivery_location.address) {
+                address = order.delivery_location.address;
+            } else if (typeof order.delivery_location === 'string') {
+                address = order.delivery_location;
+            }
+        }
+
+        // Parse items
+        var itemsHtml = '';
+        var items = [];
+        if (order.items) {
+            if (typeof order.items === 'string') {
+                try {
+                    items = JSON.parse(order.items);
+                } catch (e) {
+                    console.error('Error parsing items:', e);
+                }
+            } else if (Array.isArray(order.items)) {
+                items = order.items;
+            }
+        }
+
+        if (items.length > 0) {
+            itemsHtml = '<h6 class="mt-3">Order Items</h6>' +
+                '<div class="table-responsive">' +
+                '<table class="table table-sm">' +
+                '<thead><tr><th>Product</th><th>Quantity</th><th>Unit Price</th><th>Subtotal</th></tr></thead>' +
+                '<tbody>';
+
+            for (var i = 0; i < items.length; i++) {
+                var item = items[i];
+                var product = item.product || {};
+                var productName = product.name || 'Unknown Product';
+                var quantity = item.quantity || 0;
+                var price = product.price || 0;
+                var subtotal = quantity * price;
+
+                itemsHtml += '<tr>' +
+                    '<td>' + productName + '</td>' +
+                    '<td>' + quantity + '</td>' +
+                    '<td>$' + price.toFixed(2) + '</td>' +
+                    '<td>$' + subtotal.toFixed(2) + '</td>' +
+                    '</tr>';
+            }
+
+            itemsHtml += '</tbody></table></div>';
+        }
+
+        var html = '<div class="mb-4">' +
+            '<h6>Order Details</h6>' +
+            '<table class="table table-sm">' +
+            '<tr><th style="width: 40%">Order ID:</th><td><code>' + order.id + '</code></td></tr>' +
+            '<tr><th>Customer:</th><td>' + (order.customer || 'N/A') + '</td></tr>' +
+            '<tr><th>Total:</th><td>$' + (parseFloat(order.total).toFixed(2)) + '</td></tr>' +
+            '<tr><th>Status:</th><td>' + (order.status || 'N/A') + '</td></tr>' +
+            '<tr><th>Payment:</th><td>' + (order.payment_status || 'N/A') + '</td></tr>' +
+            '<tr><th>Payment Method:</th><td>' + (order.payment_method || 'N/A') + '</td></tr>' +
+            '<tr><th>Delivery Address:</th><td>' + address + '</td></tr>' +
+            '<tr><th>Distance from Origin:</th><td>' + (order.distance_from_origin || 'N/A') + ' km</td>' +
+            '</tr>' +
+            '<tr><th>Delivery Fee:</th><td>$' + (parseFloat(order.delivery_fee || 0).toFixed(2)) + '</td></tr>' +
+            '<tr><th>Subtotal:</th><td>$' + (parseFloat(order.subtotal || 0).toFixed(2)) + '</td></tr>' +
+            '<tr><th>Created At:</th><td>' + (order.created_at || 'N/A') + '</td></tr>' +
+            '</table>' +
+            itemsHtml +
+            '</div>';
+
+        if (activeRequest) {
+            var assignedTo = activeRequest.assigned_to ? (activeRequest.assigned_to.first_name || '') + ' ' + (activeRequest.assigned_to.last_name || '') : 'Unknown';
+            html += '<div class="alert alert-info"><strong>Active Assignment:</strong> Currently assigned to ' + assignedTo + '. Waiting for driver response.</div>';
+        }
+
+        if (requests.length > 0) {
+            html += '<h6>Assignment History</h6><div class="table-responsive"><table class="table table-sm"><thead><tr>' +
+                '<th>Date</th><th>Driver</th><th>Status</th><th>Action By</th><th>Reason</th></tr></thead><tbody>';
+
+            for (var i = 0; i < requests.length; i++) {
+                var req = requests[i];
+                var assignedTo = (req.assigned_to ? (req.assigned_to.first_name || '') + ' ' + (req.assigned_to.last_name || '') : 'Unknown');
+                var actionBy = 'System';
+                if (req.rejected_by) {
+                    actionBy = (req.rejected_by.first_name || '') + ' ' + (req.rejected_by.last_name || '');
+                } else if (req.accepted_at) {
+                    actionBy = 'Driver';
+                }
+                var statusBadge = req.status === 'accepted' ? 'success' : (req.status === 'rejected' ? 'danger' : 'warning');
+                var statusText = req.status === 'accepted' ? 'Accepted' : (req.status === 'rejected' ? 'Rejected' : 'Pending');
+
+                html += '<tr>' +
+                    '<td>' + new Date(req.created_at).toLocaleString() + '</td>' +
+                    '<td>' + assignedTo + '</td>' +
+                    '<td><span class="badge bg-' + statusBadge + '">' + statusText + '</span></td>' +
+                    '<td>' + actionBy + '</td>' +
+                    '<td>' + (req.rejection_reason || '-') + '</td>' +
+                    '</tr>';
+            }
+
+            html += '</tbody></table></div>';
+        } else {
+            html += '<div class="alert alert-secondary">No assignment history for this order.</div>';
+        }
+
+        modalBody.innerHTML = html;
+    }
+
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Event listeners
+    document.addEventListener('DOMContentLoaded', function() {
+        loadDrivers();
+
+        // Row click for history
+        var rows = document.querySelectorAll('.order-row');
+        for (var i = 0; i < rows.length; i++) {
+            rows[i].addEventListener('click', function(e) {
+                if (e.target.classList.contains('assign-btn')) return;
+                if (e.target.closest('.assign-btn')) return;
+                var orderId = this.getAttribute('data-order-id');
+                if (orderId) {
+                    showOrderHistory(orderId);
+                }
+            });
+        }
+
+        // Assign button clicks
+        var assignBtns = document.querySelectorAll('.assign-btn');
+        for (var i = 0; i < assignBtns.length; i++) {
+            assignBtns[i].addEventListener('click', function(e) {
+                e.stopPropagation();
+                var orderId = this.getAttribute('data-order-id');
+                var customer = this.getAttribute('data-order-customer');
+                showAssignModal(orderId, customer);
+            });
+        }
+    });
+</script>
+{% endblock %}

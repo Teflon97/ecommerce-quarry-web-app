@@ -1,0 +1,173 @@
+{% extends 'base.html' %} {% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h2>Employees Management</h2>
+            <p class="text-muted">Manage your team members and drivers</p>
+        </div>
+        <div class="col-auto">
+            <a href="/custom-admin/portal/employees/create/" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Add Employee
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-label">Filter by Department</label>
+                    <select class="form-select" id="departmentFilter">
+                        <option value="all">All Departments</option>
+                        <option value="Sales">Sales</option>
+                        <option value="Accounting">Accounting</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Delivery">Delivery</option>
+                        <option value="Warehouse">Warehouse</option>
+                        <option value="Management">Management</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Filter by Role</label>
+                    <select class="form-select" id="roleFilter">
+                        <option value="all">All Roles</option>
+                        <option value="Admin">Admin</option>
+                        <option value="Manager">Manager</option>
+                        <option value="Sales Rep">Sales Rep</option>
+                        <option value="Accountant">Accountant</option>
+                        <option value="Finance Officer">Finance Officer</option>
+                        <option value="Driver">Driver</option>
+                        <option value="Warehouse Staff">Warehouse Staff</option>
+                        <option value="Dispatcher">Dispatcher</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Search</label>
+                    <input type="text" class="form-control" id="searchInput" placeholder="Search by name or email...">
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col">
+                    <button class="btn btn-primary" onclick="applyFilters()">
+                        <i class="bi bi-funnel"></i> Apply Filters
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetFilters()">
+                        <i class="bi bi-arrow-repeat"></i> Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Department</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employeesList">
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let allEmployees = [];
+
+    function loadEmployees() {
+        fetch('/custom-admin/portal/api/employees/')
+            .then(response => response.json())
+            .then(data => {
+                allEmployees = data;
+                displayEmployees(allEmployees);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('employeesList').innerHTML = '<tr><td colspan="8" class="text-center text-danger">Error loading employees</td></tr>';
+            });
+    }
+
+    function displayEmployees(employees) {
+        const tbody = document.getElementById('employeesList');
+        if (employees.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No employees found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = employees.map(emp => `
+            <tr>
+                <td><code>${emp.employee_id || emp.id.slice(0,8)}</code></td>
+                <td><strong>${emp.first_name} ${emp.last_name}</strong></td>
+                <td>${emp.email}</td>
+                <td>${emp.phone || 'N/A'}</td>
+                <td><span class="badge bg-info">${emp.department}</span></td>
+                <td><span class="badge bg-secondary">${emp.role}</span></td>
+                <td>${emp.is_active ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-danger">Inactive</span>'}</td>
+                <td>
+                    <a href="/custom-admin/portal/employees/${emp.id}/edit/" class="btn btn-sm btn-warning">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    <a href="/custom-admin/portal/employees/${emp.id}/delete/" class="btn btn-sm btn-danger">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function applyFilters() {
+        const department = document.getElementById('departmentFilter').value;
+        const role = document.getElementById('roleFilter').value;
+        const search = document.getElementById('searchInput').value.toLowerCase();
+
+        let filtered = [...allEmployees];
+
+        if (department !== 'all') {
+            filtered = filtered.filter(emp => emp.department === department);
+        }
+
+        if (role !== 'all') {
+            filtered = filtered.filter(emp => emp.role === role);
+        }
+
+        if (search) {
+            filtered = filtered.filter(emp =>
+                emp.first_name.toLowerCase().includes(search) ||
+                emp.last_name.toLowerCase().includes(search) ||
+                emp.email.toLowerCase().includes(search)
+            );
+        }
+
+        displayEmployees(filtered);
+    }
+
+    function resetFilters() {
+        document.getElementById('departmentFilter').value = 'all';
+        document.getElementById('roleFilter').value = 'all';
+        document.getElementById('searchInput').value = '';
+        displayEmployees(allEmployees);
+    }
+
+    loadEmployees();
+</script>
+{% endblock %}
