@@ -8,7 +8,9 @@ import CheckoutView from './components/CheckoutView';
 import OrderConfirmation from './components/OrderConfirmation';
 import BackButton from './components/BackButton';
 import { api } from './services/api';
-import { PRODUCTS as FALLBACK_PRODUCTS } from './constants';
+
+// Fallback products in case API fails
+const FALLBACK_PRODUCTS: Product[] = [];
 
 const App: React.FC = () => {
   const [view, setView] = useState<View>('products');
