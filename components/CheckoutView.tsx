@@ -6,11 +6,12 @@ import type { DeliveryLocation, Customer, Order } from '../types';
 import { LocationMarkerIcon } from './icons';
 import MapModal from './MapModal';
 import StripePayment from './StripePayment';
-import { MMAMASHIA_COORDS } from '../constants';
+//import { MMAMASHIA_COORDS } from '../constants';
 import { api } from '../services/api';
 
 // Load Stripe with your publishable key
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+const MMAMASHIA_COORDS = { lat: -24.6581, lng: 25.9087 };
 
 // Haversine formula to calculate distance between two points in km
 const haversineDistance = (coords1: { lat: number; lng: number }, coords2: { lat: number; lng: number }): number => {
