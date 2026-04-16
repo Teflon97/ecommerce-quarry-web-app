@@ -6,12 +6,37 @@ require('dotenv').config();
 const app = express();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-// Middleware
+// Middleware - Updated CORS for Render
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174'],
+    origin: [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'https://quarry-frontend-bpgs.onrender.com',
+        'https://quarry-frontend.onrender.com',
+        'https://*.onrender.com'
+    ],
     credentials: true
 }));
 app.use(express.json());
+
+// Root route - Fix "Cannot GET /" error
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Quarry Market Backend API is running',
+        status: 'ok',
+        endpoints: [
+            '/api/health',
+            '/api/create-payment-intent',
+            '/api/confirm-payment'
+        ]
+    });
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // Create Payment Intent endpoint
 app.post('/api/create-payment-intent', async(req, res) => {
@@ -20,7 +45,6 @@ app.post('/api/create-payment-intent', async(req, res) => {
 
         console.log('Creating payment intent for order:', orderId, 'amount:', amount);
 
-        // Create a PaymentIntent with the order amount and currency
         const paymentIntent = await stripe.paymentIntents.create({
             amount: Math.round(amount), // Amount is in thebe/cents
             currency: currency || 'bwp',
@@ -47,17 +71,14 @@ app.post('/api/create-payment-intent', async(req, res) => {
 });
 
 // Confirm Payment endpoint
-// CORRECT - with ID
 app.post('/api/confirm-payment', async(req, res) => {
     try {
         const { orderId, paymentIntentId } = req.body;
 
-        // Make sure paymentIntentId is not empty
         if (!paymentIntentId) {
             return res.status(400).json({ error: 'Payment intent ID is required' });
         }
 
-        // This should be retrieve, not any other method
         const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
         res.json({
@@ -68,16 +89,13 @@ app.post('/api/confirm-payment', async(req, res) => {
             }
         });
     } catch (error) {
+        console.error('Error confirming payment:', error);
         res.status(500).json({ error: error.message });
     }
-});
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 const PORT = process.env.PORT || 5252;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    console.log(`CORS enabled for Render frontend URLs`);
 });

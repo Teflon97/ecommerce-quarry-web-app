@@ -1,8 +1,8 @@
 {
     "name": "quarry-market-backend",
     "version": "1.0.0",
-    "description": "",
-    "main": "index.js",
+    "description": "Backend for Quarry Market e-commerce",
+    "main": "server.js",
     "scripts": {
         "start": "node server.js",
         "dev": "nodemon server.js"
@@ -13,8 +13,8 @@
     "type": "commonjs",
     "dependencies": {
         "cors": "^2.8.6",
-        "dotenv": "^17.3.1",
-        "express": "^5.2.1",
+        "dotenv": "^16.3.1",
+        "express": "^4.18.2",
         "stripe": "^20.4.1"
     },
     "devDependencies": {

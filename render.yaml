@@ -6,6 +6,8 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     envVars:
+      - key: VITE_API_URL
+        value: "https://quarry-backend-vb69.onrender.com/api"
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_ANON_KEY
@@ -32,7 +34,7 @@ services:
       - key: SUPABASE_ANON_KEY
         sync: false
       - key: PORT
-        value: 3001
+        value: "5252"
 
   # Admin Portal Django
   - type: web

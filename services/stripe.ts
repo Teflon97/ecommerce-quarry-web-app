@@ -4,6 +4,8 @@ export const stripeService = {
   // Create a payment intent for card payments
   createPaymentIntent: async (orderId: string, amount: number, customerEmail?: string) => {
     try {
+      console.log('Creating payment intent for order:', orderId, 'using API URL:', API_BASE_URL);
+      
       const response = await fetch(`${API_BASE_URL}/create-payment-intent`, {
         method: 'POST',
         headers: { 

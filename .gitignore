@@ -2,6 +2,7 @@
 .env
 backend/.env
 admin_portal/.env
+.env.production
 .env.local
 .env.*.local
 
