@@ -4,6 +4,15 @@ const Stripe = require('stripe');
 require('dotenv').config();
 
 const app = express();
+
+// Validate Stripe key
+if (!process.env.STRIPE_SECRET_KEY) {
+    console.error('❌ STRIPE_SECRET_KEY is not set in environment variables');
+    console.error('Please add STRIPE_SECRET_KEY to your Render environment variables');
+} else {
+    console.log('✅ Stripe secret key found (length:', process.env.STRIPE_SECRET_KEY.length, 'chars)');
+}
+
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Middleware - Updated CORS for Render
@@ -20,7 +29,7 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Root route - Fix "Cannot GET /" error
+// Root route
 app.get('/', (req, res) => {
     res.json({
         message: 'Quarry Market Backend API is running',
@@ -45,6 +54,11 @@ app.post('/api/create-payment-intent', async(req, res) => {
 
         console.log('Creating payment intent for order:', orderId, 'amount:', amount);
 
+        // Validate amount
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ error: 'Invalid amount' });
+        }
+
         const paymentIntent = await stripe.paymentIntents.create({
             amount: Math.round(amount), // Amount is in thebe/cents
             currency: currency || 'bwp',
@@ -65,7 +79,7 @@ app.post('/api/create-payment-intent', async(req, res) => {
             paymentIntentId: paymentIntent.id
         });
     } catch (error) {
-        console.error('Error creating payment intent:', error);
+        console.error('Error creating payment intent:', error.message);
         res.status(500).json({ error: error.message });
     }
 });
@@ -89,7 +103,7 @@ app.post('/api/confirm-payment', async(req, res) => {
             }
         });
     } catch (error) {
-        console.error('Error confirming payment:', error);
+        console.error('Error confirming payment:', error.message);
         res.status(500).json({ error: error.message });
     }
 });
@@ -97,5 +111,4 @@ app.post('/api/confirm-payment', async(req, res) => {
 const PORT = process.env.PORT || 5252;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    console.log(`CORS enabled for Render frontend URLs`);
 });
