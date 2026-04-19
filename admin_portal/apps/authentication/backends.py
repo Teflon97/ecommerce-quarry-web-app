@@ -11,9 +11,9 @@ class SupabaseAuthBackend(BaseBackend):
         if not supabase_url or not supabase_key:
             return None
         
-        supabase = create_client(supabase_url, supabase_key)
-        
         try:
+            supabase = create_client(supabase_url, supabase_key)
+            
             # Try to sign in with Supabase Auth
             response = supabase.auth.sign_in_with_password({
                 "email": username,
@@ -30,20 +30,21 @@ class SupabaseAuthBackend(BaseBackend):
                 if employee_data.data:
                     employee = employee_data.data[0]
                     
-                    # Create or update Django user (for session management)
-                    try:
-                        user = User.objects.get(username=username)
-                    except User.DoesNotExist:
-                        user = User.objects.create_user(
-                            username=username,
-                            email=username,
-                            password=password,
-                            first_name=employee.get('first_name', ''),
-                            last_name=employee.get('last_name', '')
-                        )
+                    # Create or get Django user
+                    user, created = User.objects.get_or_create(
+                        username=username,
+                        defaults={
+                            'email': username,
+                            'first_name': employee.get('first_name', ''),
+                            'last_name': employee.get('last_name', '')
+                        }
+                    )
                     
-                    # Store Supabase session in user profile
-                    user.supabase_session = response.session
+                    # Store additional info in user's session via request
+                    if request:
+                        request.session['user_role'] = employee.get('role', 'Staff')
+                        request.session['user_id'] = str(employee.get('id'))
+                    
                     return user
                     
         except Exception as e:

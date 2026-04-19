@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.contrib.auth import logout as django_logout
+from django.contrib.auth import authenticate, login as django_login, logout as django_logout
+from django.contrib.auth.decorators import login_required
 import requests
 import os
 from dotenv import load_dotenv
@@ -8,9 +9,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def supabase_login(request):
-    # Clear any existing messages first
+    # Clear any existing messages
     storage = messages.get_messages(request)
     storage.used = True
+    
+    # Redirect if already logged in
+    if request.session.get('is_authenticated'):
+        role = request.session.get('user_role', 'Staff')
+        if role == 'Driver':
+            return redirect('/driver/dashboard/')
+        return redirect('/custom-admin/portal/dashboard/')
     
     if request.method == 'POST':
         email = request.POST.get('username')
@@ -18,6 +26,7 @@ def supabase_login(request):
         
         supabase_url = os.getenv('SUPABASE_URL')
         supabase_key = os.getenv('SUPABASE_ANON_KEY')
+        supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY', supabase_key)
         
         if not supabase_url or not supabase_key:
             messages.error(request, 'Supabase configuration missing')
@@ -64,9 +73,8 @@ def supabase_login(request):
                         request.session['is_authenticated'] = True
                         request.session['supabase_token'] = auth_response_data.get('access_token')
                         
-                        # Clear any existing messages before adding new one
-                        storage = messages.get_messages(request)
-                        storage.used = True
+                        # Set session expiry (1 day)
+                        request.session.set_expiry(86400)
                         
                         messages.success(request, f'Welcome back, {employee.get("first_name", email)}!')
                         
@@ -76,23 +84,36 @@ def supabase_login(request):
                         else:
                             return redirect('/custom-admin/portal/dashboard/')
                     else:
-                        # Auth failed - try to create user
-                        if supabase_key:
-                            admin_headers = {
-                                'apikey': supabase_key,
-                                'Authorization': f'Bearer {supabase_key}',
-                                'Content-Type': 'application/json'
-                            }
-                            
+                        # Auth failed - check if user exists in Supabase Auth
+                        admin_headers = {
+                            'apikey': supabase_key,
+                            'Authorization': f'Bearer {supabase_service_key}',
+                            'Content-Type': 'application/json'
+                        }
+                        
+                        # Check if user exists in auth
+                        list_users_url = f"{supabase_url}/auth/v1/admin/users"
+                        list_response = requests.get(list_users_url, headers=admin_headers)
+                        
+                        user_exists = False
+                        if list_response.status_code == 200:
+                            users = list_response.json()
+                            for user in users:
+                                if user.get('email') == email:
+                                    user_exists = True
+                                    break
+                        
+                        if not user_exists:
+                            # Create user in Supabase Auth
                             create_user_url = f"{supabase_url}/auth/v1/admin/users"
                             create_user_data = {
                                 'email': email,
                                 'password': password,
                                 'email_confirm': True,
                                 'user_metadata': {
-                                    'first_name': employee.get('first_name'),
-                                    'last_name': employee.get('last_name'),
-                                    'role': employee.get('role')
+                                    'first_name': employee.get('first_name', ''),
+                                    'last_name': employee.get('last_name', ''),
+                                    'role': employee.get('role', 'Staff')
                                 }
                             }
                             
@@ -104,11 +125,11 @@ def supabase_login(request):
                             else:
                                 messages.error(request, 'Invalid email or password.')
                         else:
-                            messages.error(request, 'Invalid email or password.')
+                            messages.error(request, 'Password is incorrect. Please try again.')
                 else:
-                    messages.error(request, 'Employee record not found')
+                    messages.error(request, 'Employee record not found. Please contact administrator.')
             else:
-                messages.error(request, 'Error checking employee record')
+                messages.error(request, 'Error checking employee record. Please try again.')
                 
         except Exception as e:
             messages.error(request, f'Login error: {str(e)}')
@@ -121,11 +142,9 @@ def supabase_logout(request):
     # Clear all session data
     request.session.flush()
     
-    # Clear all messages before adding logout message
+    # Clear all messages
     storage = messages.get_messages(request)
     storage.used = True
     
-    # Add logout message
     messages.success(request, 'You have been successfully logged out.')
-    
     return redirect('/custom-admin/login/')

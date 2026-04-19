@@ -49,6 +49,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'admin_config.wsgi.application'
 
+# Database - Use SQLite (but sessions need to be configured)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -56,7 +57,18 @@ DATABASES = {
     }
 }
 
+# Session configuration - Store sessions in database
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_SECURE = True if not DEBUG else False
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+
 AUTH_PASSWORD_VALIDATORS = []
+
+# Custom authentication backend
+AUTHENTICATION_BACKENDS = [
+    'apps.authentication.backends.SupabaseAuthBackend',
+]
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
@@ -82,3 +94,4 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 LOGIN_URL = '/custom-admin/login/'
+LOGIN_REDIRECT_URL = '/custom-admin/portal/dashboard/'
