@@ -1,7 +1,6 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.contrib.auth import authenticate, login as django_login, logout as django_logout
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth import logout as django_logout
 import requests
 import os
 from dotenv import load_dotenv
@@ -9,34 +8,28 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def supabase_login(request):
-    # Clear any existing messages
+    # Clear any existing messages first
     storage = messages.get_messages(request)
     storage.used = True
-    
-    # Redirect if already logged in
-    if request.session.get('is_authenticated'):
-        role = request.session.get('user_role', 'Staff')
-        if role == 'Driver':
-            return redirect('/driver/dashboard/')
-        return redirect('/custom-admin/portal/dashboard/')
     
     if request.method == 'POST':
         email = request.POST.get('username')
         password = request.POST.get('password')
         
         supabase_url = os.getenv('SUPABASE_URL')
-        supabase_key = os.getenv('SUPABASE_ANON_KEY')
-        supabase_service_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY', supabase_key)
+        supabase_anon_key = os.getenv('SUPABASE_ANON_KEY')
+        # Use the correct standard key name
+        supabase_service_role_key = os.getenv('SUPABASE_SERVICE_ROLE_KEY')
         
-        if not supabase_url or not supabase_key:
+        if not supabase_url or not supabase_anon_key:
             messages.error(request, 'Supabase configuration missing')
             return redirect('/custom-admin/login/')
         
         try:
-            # First, check if employee exists
+            # First, check if employee exists in employees table
             headers = {
-                'apikey': supabase_key,
-                'Authorization': f'Bearer {supabase_key}',
+                'apikey': supabase_anon_key,
+                'Authorization': f'Bearer {supabase_anon_key}',
                 'Content-Type': 'application/json'
             }
             
@@ -52,7 +45,7 @@ def supabase_login(request):
                     # Try to authenticate with Supabase Auth
                     auth_url = f"{supabase_url}/auth/v1/token?grant_type=password"
                     auth_headers = {
-                        'apikey': supabase_key,
+                        'apikey': supabase_anon_key,
                         'Content-Type': 'application/json'
                     }
                     auth_data = {
@@ -73,9 +66,6 @@ def supabase_login(request):
                         request.session['is_authenticated'] = True
                         request.session['supabase_token'] = auth_response_data.get('access_token')
                         
-                        # Set session expiry (1 day)
-                        request.session.set_expiry(86400)
-                        
                         messages.success(request, f'Welcome back, {employee.get("first_name", email)}!')
                         
                         # Redirect based on role
@@ -84,48 +74,56 @@ def supabase_login(request):
                         else:
                             return redirect('/custom-admin/portal/dashboard/')
                     else:
-                        # Auth failed - check if user exists in Supabase Auth
-                        admin_headers = {
-                            'apikey': supabase_key,
-                            'Authorization': f'Bearer {supabase_service_key}',
-                            'Content-Type': 'application/json'
-                        }
-                        
-                        # Check if user exists in auth
-                        list_users_url = f"{supabase_url}/auth/v1/admin/users"
-                        list_response = requests.get(list_users_url, headers=admin_headers)
-                        
-                        user_exists = False
-                        if list_response.status_code == 200:
-                            users = list_response.json()
-                            for user in users:
-                                if user.get('email') == email:
-                                    user_exists = True
-                                    break
-                        
-                        if not user_exists:
-                            # Create user in Supabase Auth
-                            create_user_url = f"{supabase_url}/auth/v1/admin/users"
-                            create_user_data = {
-                                'email': email,
-                                'password': password,
-                                'email_confirm': True,
-                                'user_metadata': {
-                                    'first_name': employee.get('first_name', ''),
-                                    'last_name': employee.get('last_name', ''),
-                                    'role': employee.get('role', 'Staff')
-                                }
+                        # Auth failed - user might not exist in Supabase Auth
+                        # Check if we have service role key to create user
+                        if supabase_service_role_key:
+                            # Use service role key for admin operations
+                            admin_headers = {
+                                'apikey': supabase_anon_key,
+                                'Authorization': f'Bearer {supabase_service_role_key}',
+                                'Content-Type': 'application/json'
                             }
                             
-                            create_response = requests.post(create_user_url, headers=admin_headers, json=create_user_data)
+                            # Check if user exists in Supabase Auth
+                            list_users_url = f"{supabase_url}/auth/v1/admin/users"
+                            list_response = requests.get(list_users_url, headers=admin_headers)
                             
-                            if create_response.status_code == 200:
-                                messages.info(request, 'Account created! Please login again.')
-                                return redirect('/custom-admin/login/')
+                            user_exists = False
+                            if list_response.status_code == 200:
+                                users = list_response.json()
+                                for user in users:
+                                    if user.get('email') == email:
+                                        user_exists = True
+                                        break
+                            
+                            if not user_exists:
+                                # Create user in Supabase Auth
+                                create_user_url = f"{supabase_url}/auth/v1/admin/users"
+                                create_user_data = {
+                                    'email': email,
+                                    'password': password,
+                                    'email_confirm': True,
+                                    'user_metadata': {
+                                        'first_name': employee.get('first_name', ''),
+                                        'last_name': employee.get('last_name', ''),
+                                        'role': employee.get('role', 'Staff')
+                                    }
+                                }
+                                
+                                create_response = requests.post(create_user_url, headers=admin_headers, json=create_user_data)
+                                
+                                if create_response.status_code == 200:
+                                    messages.info(request, 'Account created successfully! Please login again.')
+                                    return redirect('/custom-admin/login/')
+                                else:
+                                    # User creation failed
+                                    error_detail = create_response.json() if create_response.text else {}
+                                    error_msg = error_detail.get('msg', 'Unknown error')
+                                    messages.error(request, f'Unable to create account: {error_msg}')
                             else:
-                                messages.error(request, 'Invalid email or password.')
+                                messages.error(request, 'Password is incorrect. Please try again.')
                         else:
-                            messages.error(request, 'Password is incorrect. Please try again.')
+                            messages.error(request, 'Authentication service unavailable. Please contact administrator.')
                 else:
                     messages.error(request, 'Employee record not found. Please contact administrator.')
             else:

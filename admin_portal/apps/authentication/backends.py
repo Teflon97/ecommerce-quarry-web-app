@@ -6,13 +6,13 @@ import os
 class SupabaseAuthBackend(BaseBackend):
     def authenticate(self, request, username=None, password=None, **kwargs):
         supabase_url = os.getenv('SUPABASE_URL')
-        supabase_key = os.getenv('SUPABASE_ANON_KEY')
+        supabase_anon_key = os.getenv('SUPABASE_ANON_KEY')
         
-        if not supabase_url or not supabase_key:
+        if not supabase_url or not supabase_anon_key:
             return None
         
         try:
-            supabase = create_client(supabase_url, supabase_key)
+            supabase = create_client(supabase_url, supabase_anon_key)
             
             # Try to sign in with Supabase Auth
             response = supabase.auth.sign_in_with_password({
@@ -30,7 +30,7 @@ class SupabaseAuthBackend(BaseBackend):
                 if employee_data.data:
                     employee = employee_data.data[0]
                     
-                    # Create or get Django user
+                    # Create or get Django user for session management
                     user, created = User.objects.get_or_create(
                         username=username,
                         defaults={
@@ -40,7 +40,7 @@ class SupabaseAuthBackend(BaseBackend):
                         }
                     )
                     
-                    # Store additional info in user's session via request
+                    # Store additional info in request session
                     if request:
                         request.session['user_role'] = employee.get('role', 'Staff')
                         request.session['user_id'] = str(employee.get('id'))
